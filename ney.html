@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Video Call App</title>
+  <!-- PeerJS for WebRTC -->
+  <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+  <!-- Google Font -->
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100vh;
+      font-family: 'DM Sans', sans-serif;
+      overflow: hidden;
+      background: var(--app-background, #eaebf5);
+      color: var(--text-color, #2c303a);
+      transition: all 0.3s ease;
+    }
+
+    body.dark {
+      --app-background: #262a42;
+      --text-color: #ffffff;
+      --button-bg: #3c3f56;
+      --button-hover: #6f74ff;
+    }
+
+    .container {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      padding: 20px;
+    }
+
+    .video-section {
+      flex: 1;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      justify-content: center;
+      align-items: center;
+    }
+
+    video {
+      width: 100%;
+      max-width: 400px;
+      border-radius: 10px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+      background: #000;
+    }
+
+    .controls {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      padding: 10px;
+      background: var(--button-bg, #ffffff);
+      border-radius: 10px;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+      margin-top: 10px;
+    }
+
+    button {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 5px;
+      background: var(--button-bg, #3d42df);
+      color: #fff;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    button:hover {
+      background: var(--button-hover, #6f74ff);
+      opacity: 0.9;
+    }
+
+    .share-section {
+      text-align: center;
+      padding: 10px;
+    }
+
+    input#callLink {
+      width: 80%;
+      max-width: 400px;
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      margin-right: 10px;
+    }
+
+    #status {
+      margin: 10px 0;
+      font-size: 16px;
+      color: var(--text-color, #2c303a);
+    }
+
+    @media (max-width: 600px) {
+      video {
+        max-width: 100%;
+      }
+      .controls {
+        flex-wrap: wrap;
+      }
+      button {
+        padding: 8px 15px;
+        font-size: 14px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="share-section">
+      <p id="status">Initializing...</p>
+      <input type="text" id="callLink" readonly placeholder="Share this link to join the call">
+      <button onclick="copyLink()">Copy Link</button>
+    </div>
+    <div class="video-section">
+      <video id="localVideo" autoplay playsinline muted></video>
+      <video id="remoteVideo" autoplay playsinline></video>
+    </div>
+    <div class="controls">
+      <button onclick="toggleVideo()">Toggle Video</button>
+      <button onclick="toggleAudio()">Toggle Audio</button>
+      <button onclick="toggleMode()">Toggle Dark Mode</button>
+      <button onclick="endCall()">End Call</button>
+    </div>
+  </div>
+
+  <script>
+    // Initialize PeerJS
+    const peer = new Peer();
+    let localStream = null;
+    let currentCall = null;
+
+    // Get DOM elements
+    const localVideo = document.getElementById('localVideo');
+    const remoteVideo = document.getElementById('remoteVideo');
+    const callLinkInput = document.getElementById('callLink');
+    const status = document.getElementById('status');
+
+    // Get user media (camera and microphone)
+    async function startMedia() {
+      try {
+        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        localVideo.srcObject = localStream;
+        status.textContent = 'Ready to call. Share the link above.';
+      } catch (err) {
+        status.textContent = 'Error accessing camera/mic: ' + err.message;
+        console.error('Media error:', err);
+      }
+    }
+
+    // Handle PeerJS connection
+    peer.on('open', (id) => {
+      // Generate and display the call link
+      const callLink = `${window.location.origin}?callId=${id}`;
+      callLinkInput.value = callLink;
+      status.textContent = 'Your call ID is ready. Share the link to connect.';
+      startMedia();
+    });
+
+    // Handle incoming calls
+    peer.on('call', (call) => {
+      currentCall = call;
+      call.answer(localStream);
+      call.on('stream', (remoteStream) => {
+        remoteVideo.srcObject = remoteStream;
+        status.textContent = 'Connected to call!';
+      });
+      call.on('close', () => {
+        remoteVideo.srcObject = null;
+        status.textContent = 'Call ended. Share the link to start a new call.';
+      });
+    });
+
+    // Start a call to a peer
+    function startCall(peerId) {
+      if (!localStream) {
+        status.textContent = 'Camera/mic not initialized. Please allow access.';
+        return;
+      }
+      currentCall = peer.call(peerId, localStream);
+      currentCall.on('stream', (remoteStream) => {
+        remoteVideo.srcObject = remoteStream;
+        status.textContent = 'Connected to call!';
+      });
+      currentCall.on('close', () => {
+        remoteVideo.srcObject = null;
+        status.textContent = 'Call ended. Share the link to start a new call.';
+      });
+    }
+
+    // Toggle video on/off
+    function toggleVideo() {
+      if (localStream) {
+        const videoTrack = localStream.getVideoTracks()[0];
+        videoTrack.enabled = !videoTrack.enabled;
+        status.textContent = videoTrack.enabled ? 'Video enabled' : 'Video disabled';
+      }
+    }
+
+    // Toggle audio on/off
+    function toggleAudio() {
+      if (localStream) {
+        const audioTrack = localStream.getAudioTracks()[0];
+        audioTrack.enabled = !audioTrack.enabled;
+        status.textContent = audioTrack.enabled ? 'Audio enabled' : 'Audio disabled';
+      }
+    }
+
+    // End call
+    function endCall() {
+      if (currentCall) {
+        currentCall.close();
+      }
+      remoteVideo.srcObject = null;
+      status.textContent = 'Call ended. Share the link to start a new call.';
+    }
+
+    // Copy call link to clipboard
+    function copyLink() {
+      callLinkInput.select();
+      document.execCommand('copy');
+      status.textContent = 'Link copied to clipboard!';
+    }
+
+    // Toggle dark/light mode
+    function toggleMode() {
+      document.body.classList.toggle('dark');
+    }
+
+    // Check URL for call ID and connect if present
+    window.onload = () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const callId = urlParams.get('callId');
+      if (callId) {
+        startCall(callId);
+      }
+    };
+
+    // Handle PeerJS errors
+    peer.on('error', (err) => {
+      status.textContent = 'Error: ' + err.message;
+      console.error('PeerJS error:', err);
+    });
+  </script>
+</body>
+</html>
