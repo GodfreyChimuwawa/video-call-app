@@ -197,6 +197,7 @@
       <video id="remoteVideo" autoplay playsinline></video>
     </div>
     <div class="controls">
+      <button id="startButton" onclick="startCallButton()">Start Call</button>
       <button onclick="toggleVideo()">Toggle Video</button>
       <button onclick="toggleAudio()">Toggle Audio</button>
       <button onclick="toggleMode()">Toggle Dark Mode</button>
@@ -227,6 +228,7 @@
     const status = document.getElementById('status');
     const statusBar = document.getElementById('statusBar');
     const loading = document.getElementById('loading');
+    const startButton = document.getElementById('startButton');
 
     // Show loading state
     function showLoading() {
@@ -245,31 +247,36 @@
           video: { 
             width: { ideal: 1280 }, 
             height: { ideal: 720 },
-            facingMode: 'user' // Prefer front camera on mobile
+            facingMode: 'user'
           },
           audio: true
         };
         localStream = await navigator.mediaDevices.getUserMedia(constraints);
         localVideo.srcObject = localStream;
-        status.textContent = 'Ready to call. Share the link above.';
+        status.textContent = 'Media ready. Click Start Call to begin.';
+        startButton.disabled = false;
       } catch (err) {
         console.error('Media error:', err);
         if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
-          status.textContent = 'Permission denied. Please allow camera and microphone access.';
+          status.textContent = 'Permission denied. Please allow camera and microphone access and retry.';
+          startButton.disabled = true;
         } else if (err.name === 'OverconstrainedError') {
-          // Fallback to lower resolution
           const fallbackConstraints = { video: true, audio: true };
           try {
             localStream = await navigator.mediaDevices.getUserMedia(fallbackConstraints);
             localVideo.srcObject = localStream;
-            status.textContent = 'Using lower resolution. Ready to call.';
+            status.textContent = 'Using lower resolution. Click Start Call.';
+            startButton.disabled = false;
           } catch (fallbackErr) {
-            status.textContent = 'Failed to access media: ' + fallbackErr.message;
+            status.textContent = 'Failed to access media with fallback: ' + fallbackErr.message;
+            startButton.disabled = true;
           }
         } else if (err.name === 'NotFoundError') {
           status.textContent = 'No camera or microphone found. Please check your device.';
+          startButton.disabled = true;
         } else {
           status.textContent = 'Error accessing media: ' + err.message;
+          startButton.disabled = true;
         }
       } finally {
         hideLoading();
@@ -281,13 +288,21 @@
       const callLink = `https://godfreychimuwawa.github.io/video-call-app/?callId=${id}`;
       callLinkInput.value = callLink;
       console.log('Generated call link:', callLink);
-      status.textContent = 'Your call ID is ready. Share the link to connect.';
+      status.textContent = 'Your call ID is ready. Allow media access to start.';
       startMedia();
     });
 
     // Handle incoming calls
-    peer.on('call', (call) => {
+    peer.on('call', async (call) => {
       showLoading();
+      if (!localStream) {
+        await startMedia(); // Ensure media is ready
+        if (!localStream) {
+          status.textContent = 'Media access failed. Cannot answer call.';
+          hideLoading();
+          return;
+        }
+      }
       currentCall = call;
       call.answer(localStream);
       call.on('stream', (remoteStream) => {
@@ -314,7 +329,7 @@
     // Start a call to a peer with reconnection
     function startCall(peerId) {
       if (isConnecting || !localStream) {
-        status.textContent = 'Connecting... Please wait or allow media access.';
+        status.textContent = 'Please allow media access or wait for connection.';
         return;
       }
       isConnecting = true;
@@ -342,6 +357,17 @@
         hideLoading();
         attemptReconnect();
       });
+    }
+
+    // Start call via button (wrapper for startCall)
+    function startCallButton() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const callId = urlParams.get('callId');
+      if (callId) {
+        startCall(callId);
+      } else {
+        status.textContent = 'No call ID provided. Share this link with others.';
+      }
     }
 
     // Attempt to reconnect if call fails
@@ -392,7 +418,7 @@
       statusBar.textContent = document.body.classList.contains('dark') ? 'Dark Mode' : 'Light Mode';
     }
 
-    // Check URL for call ID and connect if present
+    // Check URL for call ID and prepare
     window.onload = () => {
       if (window.location.protocol !== 'https:') {
         status.textContent = 'Error: Requires HTTPS for media access. Use the live site.';
@@ -401,8 +427,7 @@
       const urlParams = new URLSearchParams(window.location.search);
       const callId = urlParams.get('callId');
       if (callId) {
-        console.log('Attempting to start call with ID:', callId);
-        startCall(callId);
+        status.textContent = 'Call ID detected. Click Start Call after allowing media.';
       } else {
         statusBar.textContent = 'Idle';
         status.textContent = 'No call ID provided. Generate and share a link.';
