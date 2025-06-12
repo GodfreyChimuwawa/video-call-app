@@ -20,90 +20,118 @@
       height: 100vh;
       font-family: 'DM Sans', sans-serif;
       overflow: hidden;
-      background: var(--app-background, #eaebf5);
-      color: var(--text-color, #2c303a);
+      background: var(--app-background, #f5f5f5);
+      color: var(--text-color, #333);
       transition: all 0.3s ease;
     }
 
     body.dark {
-      --app-background: #262a42;
-      --text-color: #ffffff;
-      --button-bg: #3c3f56;
-      --button-hover: #6f74ff;
+      --app-background: #1a1a2e;
+      --text-color: #e5e5e5;
+      --button-bg: #16213e;
+      --button-hover: #0f3460;
     }
 
     .container {
       display: flex;
       flex-direction: column;
       height: 100%;
+      padding: 10px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .status-bar {
+      text-align: center;
       padding: 5px;
+      font-size: 14px;
+      color: var(--text-color);
     }
 
     .video-section {
       flex: 1;
       display: flex;
       flex-wrap: wrap;
-      gap: 5px;
+      gap: 10px;
       justify-content: center;
       align-items: center;
-      padding: 5px 0;
+      padding: 10px 0;
+      min-height: 200px;
     }
 
     video {
       width: 100%;
-      max-width: 350px; /* Reduced for better mobile fit */
-      border-radius: 6px;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      max-width: 400px;
+      border-radius: 8px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
       background: #000;
+      transition: transform 0.2s;
+    }
+
+    video:hover {
+      transform: scale(1.02);
     }
 
     .controls {
       display: flex;
       justify-content: center;
-      gap: 6px;
-      padding: 8px;
-      background: var(--button-bg, #ffffff);
-      border-radius: 6px;
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-      margin-top: 8px;
+      gap: 10px;
+      padding: 10px;
+      background: var(--button-bg, #ddd);
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      margin-top: 10px;
       flex-wrap: wrap;
     }
 
     button {
-      padding: 6px 12px;
+      padding: 10px 20px;
       border: none;
-      border-radius: 4px;
-      background: var(--button-bg, #3d42df);
+      border-radius: 5px;
+      background: var(--button-bg, #4a90e2);
       color: #fff;
       cursor: pointer;
-      transition: background 0.2s;
+      transition: background 0.2s, transform 0.1s;
       font-size: 14px;
     }
 
     button:hover {
-      background: var(--button-hover, #6f74ff);
-      opacity: 0.9;
+      background: var(--button-hover, #357abd);
+      transform: translateY(-1px);
+    }
+
+    button:active {
+      transform: translateY(0);
     }
 
     .share-section {
       text-align: center;
-      padding: 5px;
+      padding: 10px;
     }
 
     input#callLink {
       width: 70%;
-      max-width: 250px;
-      padding: 5px;
+      max-width: 300px;
+      padding: 8px;
       border: 1px solid #ccc;
-      border-radius: 4px;
-      margin-right: 5px;
+      border-radius: 5px;
+      margin-right: 10px;
       font-size: 14px;
     }
 
     #status {
       margin: 5px 0;
       font-size: 14px;
-      color: var(--text-color, #2c303a);
+      color: var(--text-color);
+    }
+
+    .loading {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 18px;
+      color: var(--text-color);
     }
 
     @media (max-width: 600px) {
@@ -113,26 +141,23 @@
       }
       .controls {
         flex-direction: column;
-        gap: 4px;
+        gap: 8px;
       }
       button {
         width: 100%;
-        padding: 8px;
+        padding: 12px;
         font-size: 16px;
       }
       input#callLink {
         width: 100%;
-        margin-bottom: 5px;
+        margin-bottom: 10px;
+      }
+      .container {
+        padding: 5px;
       }
     }
 
     @media (max-width: 400px) {
-      .container {
-        padding: 3px;
-      }
-      .video-section {
-        gap: 3px;
-      }
       video {
         max-width: 100%;
       }
@@ -147,6 +172,7 @@
 </head>
 <body>
   <div class="container">
+    <div class="status-bar" id="statusBar">Connecting...</div>
     <div class="share-section">
       <p id="status">Initializing...</p>
       <input type="text" id="callLink" readonly placeholder="Share this link to join the call">
@@ -163,78 +189,131 @@
       <button onclick="endCall()">End Call</button>
     </div>
   </div>
+  <div class="loading" id="loading" style="display: none;">Connecting to call...</div>
 
   <script>
-    // Initialize PeerJS with debug logging
-    const peer = new Peer({ debug: 2 });
+    // Initialize PeerJS with STUN servers for better connectivity
+    const peer = new Peer({
+      debug: 2,
+      config: {
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' }
+        ]
+      }
+    });
     let localStream = null;
     let currentCall = null;
+    let isConnecting = false;
 
     // Get DOM elements
     const localVideo = document.getElementById('localVideo');
     const remoteVideo = document.getElementById('remoteVideo');
     const callLinkInput = document.getElementById('callLink');
     const status = document.getElementById('status');
+    const statusBar = document.getElementById('statusBar');
+    const loading = document.getElementById('loading');
 
-    // Get user media (camera and microphone)
+    // Show loading state
+    function showLoading() {
+      loading.style.display = 'block';
+    }
+
+    function hideLoading() {
+      loading.style.display = 'none';
+    }
+
+    // Get user media with optimized constraints
     async function startMedia() {
       try {
-        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        const constraints = {
+          video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: true
+        };
+        localStream = await navigator.mediaDevices.getUserMedia(constraints);
         localVideo.srcObject = localStream;
         status.textContent = 'Ready to call. Share the link above.';
+        hideLoading();
       } catch (err) {
         status.textContent = 'Error accessing camera/mic: ' + err.message;
         console.error('Media error:', err);
+        hideLoading();
       }
     }
 
     // Handle PeerJS connection
     peer.on('open', (id) => {
-      // Generate and display the call link with correct repository path
-      const callLink = `${window.location.origin}/video-call-app/?callId=${id}`;
+      const callLink = `https://godfreychimuwawa.github.io/video-call-app/?callId=${id}`;
       callLinkInput.value = callLink;
-      console.log('Generated call link:', callLink); // Debug log
+      console.log('Generated call link:', callLink);
       status.textContent = 'Your call ID is ready. Share the link to connect.';
       startMedia();
     });
 
     // Handle incoming calls
     peer.on('call', (call) => {
+      showLoading();
       currentCall = call;
       call.answer(localStream);
       call.on('stream', (remoteStream) => {
         remoteVideo.srcObject = remoteStream;
+        statusBar.textContent = 'Connected';
         status.textContent = 'Connected to call!';
+        hideLoading();
       });
       call.on('close', () => {
         remoteVideo.srcObject = null;
+        statusBar.textContent = 'Disconnected';
         status.textContent = 'Call ended. Share the link to start a new call.';
+        hideLoading();
       });
       call.on('error', (err) => {
+        statusBar.textContent = 'Connection Error';
         status.textContent = 'Call error: ' + err.message;
         console.error('Call error:', err);
+        hideLoading();
+        attemptReconnect();
       });
     });
 
-    // Start a call to a peer
+    // Start a call to a peer with reconnection
     function startCall(peerId) {
-      if (!localStream) {
-        status.textContent = 'Camera/mic not initialized. Please allow access.';
+      if (isConnecting || !localStream) {
+        status.textContent = 'Connecting... Please wait.';
         return;
       }
+      isConnecting = true;
+      showLoading();
       currentCall = peer.call(peerId, localStream);
       currentCall.on('stream', (remoteStream) => {
         remoteVideo.srcObject = remoteStream;
+        statusBar.textContent = 'Connected';
         status.textContent = 'Connected to call!';
+        isConnecting = false;
+        hideLoading();
       });
       currentCall.on('close', () => {
         remoteVideo.srcObject = null;
+        statusBar.textContent = 'Disconnected';
         status.textContent = 'Call ended. Share the link to start a new call.';
+        isConnecting = false;
+        hideLoading();
       });
       currentCall.on('error', (err) => {
+        statusBar.textContent = 'Connection Error';
         status.textContent = 'Call error: ' + err.message;
         console.error('Call error:', err);
+        isConnecting = false;
+        hideLoading();
+        attemptReconnect();
       });
+    }
+
+    // Attempt to reconnect if call fails
+    function attemptReconnect() {
+      if (currentCall && currentCall.peer) {
+        setTimeout(() => startCall(currentCall.peer), 2000); // Retry after 2 seconds
+      }
     }
 
     // Toggle video on/off
@@ -261,6 +340,7 @@
         currentCall.close();
       }
       remoteVideo.srcObject = null;
+      statusBar.textContent = 'Disconnected';
       status.textContent = 'Call ended. Share the link to start a new call.';
     }
 
@@ -274,6 +354,7 @@
     // Toggle dark/light mode
     function toggleMode() {
       document.body.classList.toggle('dark');
+      statusBar.textContent = document.body.classList.contains('dark') ? 'Dark Mode' : 'Light Mode';
     }
 
     // Check URL for call ID and connect if present
@@ -281,18 +362,25 @@
       const urlParams = new URLSearchParams(window.location.search);
       const callId = urlParams.get('callId');
       if (callId) {
-        console.log('Attempting to start call with ID:', callId); // Debug log
+        console.log('Attempting to start call with ID:', callId);
         startCall(callId);
       } else {
+        statusBar.textContent = 'Idle';
         status.textContent = 'No call ID provided. Generate and share a link.';
       }
     };
 
     // Handle PeerJS errors
     peer.on('error', (err) => {
+      statusBar.textContent = 'Error';
       status.textContent = 'PeerJS error: ' + err.message;
       console.error('PeerJS error:', err);
+      hideLoading();
     });
+
+    // Start initialization
+    showLoading();
+    startMedia();
   </script>
 </body>
 </html>
