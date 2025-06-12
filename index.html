@@ -36,15 +36,15 @@
       display: flex;
       flex-direction: column;
       height: 100%;
-      padding: 10px;
+      padding: 1vw;
       max-width: 1200px;
       margin: 0 auto;
     }
 
     .status-bar {
       text-align: center;
-      padding: 5px;
-      font-size: 14px;
+      padding: 0.5vw;
+      font-size: 1.2vw;
       color: var(--text-color);
     }
 
@@ -52,18 +52,19 @@
       flex: 1;
       display: flex;
       flex-wrap: wrap;
-      gap: 10px;
+      gap: 1vw;
       justify-content: center;
       align-items: center;
-      padding: 10px 0;
-      min-height: 200px;
+      padding: 1vw 0;
+      min-height: 20vh;
     }
 
     video {
       width: 100%;
-      max-width: 400px;
-      border-radius: 8px;
-      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      max-width: 40vw;
+      max-height: 40vh;
+      border-radius: 0.8vw;
+      box-shadow: 0 0.4vw 0.8vw rgba(0, 0, 0, 0.1);
       background: #000;
       transition: transform 0.2s;
     }
@@ -75,29 +76,29 @@
     .controls {
       display: flex;
       justify-content: center;
-      gap: 10px;
-      padding: 10px;
+      gap: 1vw;
+      padding: 1vw;
       background: var(--button-bg, #ddd);
-      border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-      margin-top: 10px;
+      border-radius: 0.8vw;
+      box-shadow: 0 0.2vw 0.4vw rgba(0, 0, 0, 0.1);
+      margin-top: 1vw;
       flex-wrap: wrap;
     }
 
     button {
-      padding: 10px 20px;
+      padding: 1vw 2vw;
       border: none;
-      border-radius: 5px;
+      border-radius: 0.5vw;
       background: var(--button-bg, #4a90e2);
       color: #fff;
       cursor: pointer;
       transition: background 0.2s, transform 0.1s;
-      font-size: 14px;
+      font-size: 1.2vw;
     }
 
     button:hover {
       background: var(--button-hover, #357abd);
-      transform: translateY(-1px);
+      transform: translateY(-0.2vw);
     }
 
     button:active {
@@ -106,22 +107,22 @@
 
     .share-section {
       text-align: center;
-      padding: 10px;
+      padding: 1vw;
     }
 
     input#callLink {
       width: 70%;
-      max-width: 300px;
-      padding: 8px;
-      border: 1px solid #ccc;
-      border-radius: 5px;
-      margin-right: 10px;
-      font-size: 14px;
+      max-width: 30vw;
+      padding: 0.8vw;
+      border: 0.1vw solid #ccc;
+      border-radius: 0.5vw;
+      margin-right: 0.5vw;
+      font-size: 1.2vw;
     }
 
     #status {
-      margin: 5px 0;
-      font-size: 14px;
+      margin: 0.5vw 0;
+      font-size: 1.2vw;
       color: var(--text-color);
     }
 
@@ -130,42 +131,55 @@
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      font-size: 18px;
+      font-size: 1.5vw;
       color: var(--text-color);
+    }
+
+    @media (max-width: 800px) {
+      video {
+        max-width: 50vw;
+        max-height: 30vh;
+      }
+      button {
+        font-size: 1.5vw;
+      }
     }
 
     @media (max-width: 600px) {
       video {
-        max-width: 100%;
-        height: auto;
+        max-width: 90vw;
+        max-height: 25vh;
       }
       .controls {
         flex-direction: column;
-        gap: 8px;
+        gap: 0.8vw;
       }
       button {
         width: 100%;
-        padding: 12px;
-        font-size: 16px;
+        padding: 1.5vw;
+        font-size: 1.8vw;
       }
       input#callLink {
         width: 100%;
-        margin-bottom: 10px;
+        margin-bottom: 0.8vw;
       }
       .container {
-        padding: 5px;
+        padding: 0.5vw;
+      }
+      .status-bar, #status {
+        font-size: 1.5vw;
       }
     }
 
     @media (max-width: 400px) {
       video {
-        max-width: 100%;
+        max-height: 20vh;
       }
-      #status {
-        font-size: 12px;
+      .status-bar, #status {
+        font-size: 1.2vw;
       }
       button {
-        font-size: 14px;
+        font-size: 1.6vw;
       }
     }
   </style>
@@ -223,20 +237,41 @@
       loading.style.display = 'none';
     }
 
-    // Get user media with optimized constraints
+    // Get user media with fallback constraints
     async function startMedia() {
+      showLoading();
       try {
         const constraints = {
-          video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+          video: { 
+            width: { ideal: 1280 }, 
+            height: { ideal: 720 },
+            facingMode: 'user' // Prefer front camera on mobile
+          },
           audio: true
         };
         localStream = await navigator.mediaDevices.getUserMedia(constraints);
         localVideo.srcObject = localStream;
         status.textContent = 'Ready to call. Share the link above.';
-        hideLoading();
       } catch (err) {
-        status.textContent = 'Error accessing camera/mic: ' + err.message;
         console.error('Media error:', err);
+        if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+          status.textContent = 'Permission denied. Please allow camera and microphone access.';
+        } else if (err.name === 'OverconstrainedError') {
+          // Fallback to lower resolution
+          const fallbackConstraints = { video: true, audio: true };
+          try {
+            localStream = await navigator.mediaDevices.getUserMedia(fallbackConstraints);
+            localVideo.srcObject = localStream;
+            status.textContent = 'Using lower resolution. Ready to call.';
+          } catch (fallbackErr) {
+            status.textContent = 'Failed to access media: ' + fallbackErr.message;
+          }
+        } else if (err.name === 'NotFoundError') {
+          status.textContent = 'No camera or microphone found. Please check your device.';
+        } else {
+          status.textContent = 'Error accessing media: ' + err.message;
+        }
+      } finally {
         hideLoading();
       }
     }
@@ -279,7 +314,7 @@
     // Start a call to a peer with reconnection
     function startCall(peerId) {
       if (isConnecting || !localStream) {
-        status.textContent = 'Connecting... Please wait.';
+        status.textContent = 'Connecting... Please wait or allow media access.';
         return;
       }
       isConnecting = true;
@@ -312,7 +347,7 @@
     // Attempt to reconnect if call fails
     function attemptReconnect() {
       if (currentCall && currentCall.peer) {
-        setTimeout(() => startCall(currentCall.peer), 2000); // Retry after 2 seconds
+        setTimeout(() => startCall(currentCall.peer), 2000);
       }
     }
 
@@ -359,6 +394,10 @@
 
     // Check URL for call ID and connect if present
     window.onload = () => {
+      if (window.location.protocol !== 'https:') {
+        status.textContent = 'Error: Requires HTTPS for media access. Use the live site.';
+        return;
+      }
       const urlParams = new URLSearchParams(window.location.search);
       const callId = urlParams.get('callId');
       if (callId) {
