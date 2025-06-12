@@ -36,45 +36,48 @@
       display: flex;
       flex-direction: column;
       height: 100%;
-      padding: 20px;
+      padding: 5px;
     }
 
     .video-section {
       flex: 1;
       display: flex;
       flex-wrap: wrap;
-      gap: 20px;
+      gap: 5px;
       justify-content: center;
       align-items: center;
+      padding: 5px 0;
     }
 
     video {
       width: 100%;
-      max-width: 400px;
-      border-radius: 10px;
-      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+      max-width: 350px; /* Reduced for better mobile fit */
+      border-radius: 6px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
       background: #000;
     }
 
     .controls {
       display: flex;
       justify-content: center;
-      gap: 10px;
-      padding: 10px;
+      gap: 6px;
+      padding: 8px;
       background: var(--button-bg, #ffffff);
-      border-radius: 10px;
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
-      margin-top: 10px;
+      border-radius: 6px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      margin-top: 8px;
+      flex-wrap: wrap;
     }
 
     button {
-      padding: 10px 20px;
+      padding: 6px 12px;
       border: none;
-      border-radius: 5px;
+      border-radius: 4px;
       background: var(--button-bg, #3d42df);
       color: #fff;
       cursor: pointer;
       transition: background 0.2s;
+      font-size: 14px;
     }
 
     button:hover {
@@ -84,33 +87,59 @@
 
     .share-section {
       text-align: center;
-      padding: 10px;
+      padding: 5px;
     }
 
     input#callLink {
-      width: 80%;
-      max-width: 400px;
-      padding: 8px;
+      width: 70%;
+      max-width: 250px;
+      padding: 5px;
       border: 1px solid #ccc;
-      border-radius: 5px;
-      margin-right: 10px;
+      border-radius: 4px;
+      margin-right: 5px;
+      font-size: 14px;
     }
 
     #status {
-      margin: 10px 0;
-      font-size: 16px;
+      margin: 5px 0;
+      font-size: 14px;
       color: var(--text-color, #2c303a);
     }
 
     @media (max-width: 600px) {
       video {
         max-width: 100%;
+        height: auto;
       }
       .controls {
-        flex-wrap: wrap;
+        flex-direction: column;
+        gap: 4px;
       }
       button {
-        padding: 8px 15px;
+        width: 100%;
+        padding: 8px;
+        font-size: 16px;
+      }
+      input#callLink {
+        width: 100%;
+        margin-bottom: 5px;
+      }
+    }
+
+    @media (max-width: 400px) {
+      .container {
+        padding: 3px;
+      }
+      .video-section {
+        gap: 3px;
+      }
+      video {
+        max-width: 100%;
+      }
+      #status {
+        font-size: 12px;
+      }
+      button {
         font-size: 14px;
       }
     }
@@ -136,8 +165,8 @@
   </div>
 
   <script>
-    // Initialize PeerJS
-    const peer = new Peer();
+    // Initialize PeerJS with debug logging
+    const peer = new Peer({ debug: 2 });
     let localStream = null;
     let currentCall = null;
 
@@ -161,9 +190,10 @@
 
     // Handle PeerJS connection
     peer.on('open', (id) => {
-      // Generate and display the call link
-      const callLink = `${window.location.origin}?callId=${id}`;
+      // Generate and display the call link with correct repository path
+      const callLink = `${window.location.origin}/video-call-app/?callId=${id}`;
       callLinkInput.value = callLink;
+      console.log('Generated call link:', callLink); // Debug log
       status.textContent = 'Your call ID is ready. Share the link to connect.';
       startMedia();
     });
@@ -179,6 +209,10 @@
       call.on('close', () => {
         remoteVideo.srcObject = null;
         status.textContent = 'Call ended. Share the link to start a new call.';
+      });
+      call.on('error', (err) => {
+        status.textContent = 'Call error: ' + err.message;
+        console.error('Call error:', err);
       });
     });
 
@@ -196,6 +230,10 @@
       currentCall.on('close', () => {
         remoteVideo.srcObject = null;
         status.textContent = 'Call ended. Share the link to start a new call.';
+      });
+      currentCall.on('error', (err) => {
+        status.textContent = 'Call error: ' + err.message;
+        console.error('Call error:', err);
       });
     }
 
@@ -243,13 +281,16 @@
       const urlParams = new URLSearchParams(window.location.search);
       const callId = urlParams.get('callId');
       if (callId) {
+        console.log('Attempting to start call with ID:', callId); // Debug log
         startCall(callId);
+      } else {
+        status.textContent = 'No call ID provided. Generate and share a link.';
       }
     };
 
     // Handle PeerJS errors
     peer.on('error', (err) => {
-      status.textContent = 'Error: ' + err.message;
+      status.textContent = 'PeerJS error: ' + err.message;
       console.error('PeerJS error:', err);
     });
   </script>
